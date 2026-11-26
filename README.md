@@ -70,6 +70,7 @@ into three systems, the way an enterprise's data is actually spread out:
 | Oracle `finance` schema | invoices, refunds and SLA credits, monthly budgets |
 | DuckDB warehouse | star schema built by an ETL from the two systems above: `fact_revenue`, `fact_budget`, and dimensions for date, region, product and customer |
 | `data/documents/` | 15 PDFs: policies, memos, an incident postmortem, a quarterly review, product guides |
+| `data/web_fixtures/` | offline web snapshot on `.example` domains: competitor press release, outage news, analyst report, illustrative vendor profiles, a forum thread, and a blog with planted prompt injection |
 
 The last complete quarter contains a planted revenue drop of about 15%. It is driven by EMEA (a
 Professional edition price increase) and APAC (a platform outage and a competitor promotion). The
@@ -106,6 +107,19 @@ excluded unless asked for. A three-level evidence check (strong / weak / none) s
 entirely when nothing relevant is accessible. Answers must cite passage ids with word-for-word
 quotes, which are verified; unverifiable claims are repaired once, then dropped.
 
+**Web research** (`tools/web/`). The LLM drafts search queries, and an egress guard refuses any
+query containing internal document ids, record ids, money amounts or confidentiality markers.
+Search tries Tavily (if `TAVILY_API_KEY` is set), then free engines via `ddgs`, then an offline
+snapshot written by `make data` (`WEB_MODE=fixtures` uses only the snapshot, for evals and CI).
+Pages are fetched with SSRF protection on every redirect (no private, loopback or cloud-metadata
+addresses) and a size cap, and the main text is extracted with `trafilatura`. All web content is
+untrusted: hidden elements are stripped, and sentences addressed to an AI ("ignore previous
+instructions", "you are now ...") are removed and flagged, which halves the source's credibility.
+Each source is scored on credibility (vendor, analyst, press, reference, blog, forum), recency
+and relevance. Findings must quote their sources word for word, like document answers. Searches
+and pages are cached in Redis for a day, and a page that can't be fetched falls back to its
+search snippet, marked as such.
+
 ## Cost
 
 Built to run for a few dollars in total:
@@ -125,6 +139,7 @@ src/analytics_platform/
   security.py      user context: groups, region scope, demo users
   tools/sql/       semantic layer compiler, period resolver, SQL guard, data sources, SQL tool
   tools/rag/       PDF parsing, chunking, embeddings, pgvector store, hybrid retrieval, Q&A
+  tools/web/       search providers, safe fetching, sanitiser, source scoring, research tool
 semantic_layer/    governed metric and dimension definitions
 src/data_gen/      synthetic data: simulation, Postgres/Oracle loaders, warehouse ETL, PDFs
 infra/postgres/    database init (schemas, pgvector, read-only analyst role)

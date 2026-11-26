@@ -65,6 +65,18 @@ class Settings(BaseSettings):
     rag_min_relevance: float = 0.01  # below: no evidence, the LLM is not called
     rag_strong_relevance: float = 0.5  # below: weak evidence, the answer is flagged
 
+    # auto: live search, falling back to the offline fixtures; fixtures: offline only (evals, CI)
+    web_mode: Literal["auto", "live", "fixtures"] = "auto"
+    web_fixtures_dir: str = "data/web_fixtures"
+    web_search_backends: list[str] = ["bing", "yahoo", "duckduckgo"]  # tried in order (ddgs)
+    web_max_results: int = 5  # per query
+    web_max_pages: int = 6  # fetched per research call
+    web_fetch_timeout_s: float = 10.0
+    web_max_page_bytes: int = 3_000_000
+    web_max_page_chars: int = 6_000  # extracted text kept per page
+    web_min_source_score: float = 0.35
+    web_cache_ttl_s: int = 24 * 3600
+
     def postgres_dsn(self, *, read_only: bool = False) -> str:
         user, password = (
             (self.postgres_ro_user, self.postgres_ro_password)

@@ -1,13 +1,12 @@
 """Grounded document Q&A: answers only from retrieved passages, every claim quoted and checked."""
 
-import re
-
 from pydantic import BaseModel, Field
 
 from analytics_platform.config import Settings
 from analytics_platform.llm import BaseLLM, Message, ModelTier
 from analytics_platform.security import UserContext
 from analytics_platform.tools.base import Citation
+from analytics_platform.tools.grounding import quote_in
 from analytics_platform.tools.rag.models import RetrievedChunk
 from analytics_platform.tools.rag.retrieval import HybridRetriever, Retrieval
 
@@ -51,11 +50,6 @@ class DocumentAnswer(BaseModel):
     warnings: list[str] = []
 
 
-def _normalise(text: str) -> str:
-    text = text.replace("\u2019", "'").replace("\u2018", "'")
-    return re.sub(r"\s+", " ", re.sub(r"[*_`]", "", text)).strip().lower().rstrip(".")
-
-
 def check_claims(claims: list[Claim], chunks: dict[str, RetrievedChunk]) -> dict[int, str]:
     """Citation problems by claim index: unknown passage ids, or quotes not in the cited text."""
     problems = {}
@@ -64,8 +58,7 @@ def check_claims(claims: list[Claim], chunks: dict[str, RetrievedChunk]) -> dict
         if unknown:
             problems[i] = f"Claim {i + 1} cites unknown passages {unknown}."
             continue
-        quote = _normalise(claim.quote)
-        if not any(quote in _normalise(chunks[cid].content) for cid in claim.chunk_ids):
+        if not quote_in(claim.quote, [chunks[cid].content for cid in claim.chunk_ids]):
             problems[i] = (
                 f"Claim {i + 1}: the quote {claim.quote!r} does not appear word for word in "
                 f"{claim.chunk_ids}."

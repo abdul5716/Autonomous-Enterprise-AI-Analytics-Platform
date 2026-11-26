@@ -17,6 +17,7 @@ from data_gen.load_oracle import create_read_only_user, load_oracle
 from data_gen.load_postgres import load_postgres
 from data_gen.simulate import Dataset, revenue_by_region, simulate
 from data_gen.warehouse import build_warehouse
+from data_gen.web_pages import write_web_fixtures
 
 
 def _step[R](name: str, fn: Callable[[], R]) -> R:
@@ -154,6 +155,11 @@ def main() -> int:
     )
     docs = _step("Writing documents", lambda: write_documents(ds, Path(s.documents_dir)))
     print(f"   {len(docs)} PDFs in {s.documents_dir}")
+    pages = _step(
+        "Writing offline web fixtures",
+        lambda: write_web_fixtures(ds.timeline, Path(s.web_fixtures_dir)),
+    )
+    print(f"   {len(pages)} pages in {s.web_fixtures_dir}")
 
     answer_key = build_answer_key(ds, docs, args.seed)
     key_path = Path(s.answer_key_path)
