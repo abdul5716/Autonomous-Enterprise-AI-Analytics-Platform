@@ -5,6 +5,7 @@ description = "Autonomous Enterprise AI Analytics Platform: agentic, evidence-ba
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "ddgs>=9.16.1",
     "duckdb>=2.0.1",
     "faker>=40.63.0",
     "fastembed>=0.9.1",
@@ -23,6 +24,7 @@ dependencies = [
     "reportlab>=5.1.2",
     "sqlglot>=30.35.0",
     "tenacity>=9.2.1",
+    "trafilatura>=2.4.0",
 ]
 
 [dependency-groups]
@@ -58,7 +60,7 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["litellm.*", "fakeredis.*", "oracledb.*", "reportlab.*", "flashrank.*"]
+module = ["litellm.*", "fakeredis.*", "oracledb.*", "reportlab.*", "flashrank.*", "lxml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -67,3 +69,4 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = ["integration: requires the docker compose stack"]
 addopts = "-m 'not integration'"
+filterwarnings = ["ignore:SOCKS support in urllib3"]

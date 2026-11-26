@@ -15,5 +15,6 @@ data/artifacts/
 data/documents/
 data/generated/
 data/models/
+data/web_fixtures/
 *.duckdb
 *.duckdb.wal
