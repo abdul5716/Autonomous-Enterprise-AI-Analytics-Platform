@@ -13,7 +13,7 @@ import duckdb
 
 from analytics_platform.config import Settings, get_settings
 from data_gen.documents import Document, write_documents
-from data_gen.load_oracle import load_oracle
+from data_gen.load_oracle import create_read_only_user, load_oracle
 from data_gen.load_postgres import load_postgres
 from data_gen.simulate import Dataset, revenue_by_region, simulate
 from data_gen.warehouse import build_warehouse
@@ -129,6 +129,17 @@ def main() -> int:
     _step(
         "Loading Oracle finance",
         lambda: load_oracle(ds, user=s.oracle_user, password=oracle_password, dsn=s.oracle_dsn),
+    )
+    _step(
+        "Creating Oracle read-only user",
+        lambda: create_read_only_user(
+            admin_user=s.oracle_admin_user,
+            admin_password=s.oracle_admin_password.get_secret_value(),
+            dsn=s.oracle_dsn,
+            owner=s.oracle_user,
+            ro_user=s.oracle_ro_user,
+            ro_password=s.oracle_ro_password.get_secret_value(),
+        ),
     )
     _step(
         "Building DuckDB warehouse from Postgres and Oracle",
