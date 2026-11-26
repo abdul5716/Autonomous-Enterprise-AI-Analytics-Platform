@@ -1,0 +1,72 @@
+name: aeap
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aeap-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nimbus}
+      POSTGRES_USER: ${POSTGRES_USER:-nimbus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nimbus_dev}
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    container_name: aeap-oracle
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_ADMIN_PASSWORD:-oracle_admin_dev}
+      APP_USER: ${ORACLE_USER:-finance}
+      APP_USER_PASSWORD: ${ORACLE_PASSWORD:-finance_dev}
+    ports:
+      - "${ORACLE_PORT:-51521}:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: aeap-redis
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${REDIS_PORT:-56379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: aeap-phoenix
+    ports:
+      - "${PHOENIX_PORT:-6006}:6006"
+    volumes:
+      - phoenix_data:/mnt/data
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  oracle_data:
+  redis_data:
+  phoenix_data:
