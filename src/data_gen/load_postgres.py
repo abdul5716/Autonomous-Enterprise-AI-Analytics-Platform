@@ -109,6 +109,36 @@ CREATE TABLE crm.support_tickets (
 CREATE INDEX ON crm.subscriptions (customer_id);
 CREATE INDEX ON crm.opportunities (close_date);
 CREATE INDEX ON crm.support_tickets (customer_id, created_at);
+
+-- Row-level security for the agent's read-only role. The SQL tool sets app.region_scope per
+-- transaction: '*' for all regions or a comma-separated list. Unset means no rows (fail closed).
+CREATE OR REPLACE FUNCTION crm.region_visible(r text) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+    SELECT CASE coalesce(current_setting('app.region_scope', true), '')
+        WHEN '' THEN false
+        WHEN '*' THEN true
+        ELSE r = ANY (string_to_array(current_setting('app.region_scope', true), ','))
+    END
+$$;
+
+ALTER TABLE crm.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm.sales_reps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm.opportunities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm.subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crm.support_tickets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY region_scope ON crm.customers FOR SELECT TO analyst_ro
+    USING (crm.region_visible(region));
+CREATE POLICY region_scope ON crm.sales_reps FOR SELECT TO analyst_ro
+    USING (crm.region_visible(region));
+CREATE POLICY region_scope ON crm.opportunities FOR SELECT TO analyst_ro
+    USING (crm.region_visible(region));
+CREATE POLICY region_scope ON crm.subscriptions FOR SELECT TO analyst_ro
+    USING (EXISTS (SELECT 1 FROM crm.customers c WHERE c.customer_id = subscriptions.customer_id));
+CREATE POLICY region_scope ON crm.support_tickets FOR SELECT TO analyst_ro
+    USING (EXISTS (
+        SELECT 1 FROM crm.customers c WHERE c.customer_id = support_tickets.customer_id
+    ));
 """
 
 TABLES: dict[str, list[str]] = {

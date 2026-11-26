@@ -37,9 +37,16 @@ class Settings(BaseSettings):
     oracle_service: str = "FREEPDB1"
     oracle_user: str = "finance"
     oracle_password: SecretStr = SecretStr("finance_dev")
+    oracle_admin_user: str = "system"
+    oracle_admin_password: SecretStr = SecretStr("oracle_admin_dev")
+    oracle_ro_user: str = "finance_ro"
+    oracle_ro_password: SecretStr = SecretStr("finance_ro_dev")
 
     redis_url: str = "redis://localhost:56379/0"
     duckdb_path: str = "data/warehouse/nimbus.duckdb"
+    semantic_layer_path: str = "semantic_layer/metrics.yaml"
+    sql_max_rows: int = 1000
+    sql_timeout_s: float = 15.0
     documents_dir: str = "data/documents"
     # Expected answers for evals. Never exposed to the agent's tools.
     answer_key_path: str = "data/generated/answer_key.json"

@@ -1,0 +1,135 @@
+# Governed business metrics for Nimbus Analytics, compiled to SQL on the DuckDB warehouse.
+# The agent picks metrics and dimensions by name; it never writes the SQL for these itself.
+version: 1
+fiscal_year_start_month: 1  # fiscal year = calendar year
+
+facts:
+  revenue:
+    table: fact_revenue
+    alias: f
+    joins: [date, region, product, customer]
+  budget:
+    table: fact_budget
+    alias: b
+    joins: [date, region]
+
+joins:
+  date: {table: dim_date, alias: d, condition: "{fact}.date_key = d.date_key"}
+  region: {table: dim_region, alias: r, condition: "{fact}.region_key = r.region_key"}
+  product: {table: dim_product, alias: p, condition: "{fact}.product_key = p.product_key"}
+  customer: {table: dim_customer, alias: c, condition: "{fact}.customer_key = c.customer_key"}
+
+time_column: d.full_date
+
+metrics:
+  net_revenue:
+    fact: revenue
+    label: Net revenue (USD)
+    description: >-
+      Invoiced subscription revenue minus refunds and SLA credits. This is what "revenue" means
+      unless the user explicitly asks for gross or invoiced revenue.
+    sql: SUM(f.amount_usd)
+    format: currency
+  gross_revenue:
+    fact: revenue
+    label: Gross invoiced revenue (USD)
+    description: Invoiced subscription revenue before refunds and credits.
+    sql: SUM(f.amount_usd) FILTER (WHERE f.txn_type = 'invoice')
+    format: currency
+  refunds:
+    fact: revenue
+    label: Refunds and credits (USD)
+    description: All refunds and SLA credits issued, as a positive amount, dated by refund date.
+    sql: -SUM(f.amount_usd) FILTER (WHERE f.txn_type = 'refund')
+    format: currency
+  sla_credits:
+    fact: revenue
+    label: SLA credits (USD)
+    description: Service credits issued for availability incidents, as a positive amount.
+    sql: -SUM(f.amount_usd) FILTER (WHERE f.refund_reason = 'sla_credit')
+    format: currency
+  billed_customers:
+    fact: revenue
+    label: Billed customers
+    description: Number of distinct customers invoiced in the period.
+    sql: COUNT(DISTINCT f.customer_key) FILTER (WHERE f.txn_type = 'invoice')
+    format: integer
+  billed_seat_months:
+    fact: revenue
+    label: Billed seat-months
+    description: Seats invoiced summed over each monthly invoice in the period.
+    sql: SUM(f.seats) FILTER (WHERE f.txn_type = 'invoice')
+    format: integer
+  budget:
+    fact: budget
+    label: Revenue budget (USD)
+    description: Planned monthly revenue by region and product line.
+    sql: SUM(b.amount_usd)
+    format: currency
+
+dimensions:
+  region:
+    description: Sales region code.
+    sql: r.region_code
+    join: region
+    values: [NA, EMEA, APAC, LATAM]
+  region_name:
+    description: Full sales region name.
+    sql: r.region_name
+    join: region
+  product:
+    description: Product name.
+    sql: p.product_name
+    join: product
+    values:
+      - Nimbus CRM Starter
+      - Nimbus CRM Professional
+      - Nimbus CRM Enterprise
+      - Nimbus Analytics Add-on
+      - Nimbus AI Assistant
+  product_line:
+    description: Product line.
+    sql: {revenue: p.product_line, budget: b.product_line}
+    join: {revenue: product}
+    values: [Core CRM, Add-ons]
+  edition:
+    description: Product edition.
+    sql: p.edition
+    join: product
+    values: [Starter, Professional, Enterprise, Add-on]
+  segment:
+    description: Customer segment.
+    sql: c.segment
+    join: customer
+    values: [SMB, Mid-Market, Enterprise]
+  industry:
+    description: Customer industry.
+    sql: c.industry
+    join: customer
+  country:
+    description: Customer country name.
+    sql: c.country_name
+    join: customer
+  customer:
+    description: Customer company name.
+    sql: c.company_name
+    join: customer
+  refund_reason:
+    description: Reason code on refunds and credits (NULL for invoices).
+    sql: f.refund_reason
+    values: [billing_error, goodwill_credit, prorated_cancellation, sla_credit]
+  month:
+    description: Calendar month as YYYY-MM.
+    sql: d.year_month
+    join: date
+    time_grain: true
+  quarter:
+    description: Calendar quarter as YYYY-Qn, e.g. 2026-Q3.
+    sql: "d.year || '-Q' || d.quarter"
+    join: date
+    time_grain: true
+  year:
+    description: Calendar year.
+    sql: d.year
+    join: date
+    time_grain: true

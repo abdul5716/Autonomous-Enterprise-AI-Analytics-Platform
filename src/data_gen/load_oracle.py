@@ -80,6 +80,17 @@ TABLES: dict[str, list[str]] = {
 BATCH_SIZE = 5_000
 
 
+def create_read_only_user(
+    *, admin_user: str, admin_password: str, dsn: str, owner: str, ro_user: str, ro_password: str
+) -> None:
+    """Create the agent's read-only Oracle user with SELECT on the finance schema only."""
+    with oracledb.connect(user=admin_user, password=admin_password, dsn=dsn) as conn:
+        cur = conn.cursor()
+        cur.execute(f'CREATE USER IF NOT EXISTS {ro_user} IDENTIFIED BY "{ro_password}"')
+        cur.execute(f"GRANT CREATE SESSION TO {ro_user}")
+        cur.execute(f"GRANT SELECT ANY TABLE ON SCHEMA {owner} TO {ro_user}")
+
+
 def load_oracle(ds: Dataset, *, user: str, password: str, dsn: str) -> dict[str, int]:
     counts = {}
     with oracledb.connect(user=user, password=password, dsn=dsn) as conn:
