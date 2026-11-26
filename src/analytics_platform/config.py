@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     web_min_source_score: float = 0.35
     web_cache_ttl_s: int = 24 * 3600
 
+    # subprocess offers no isolation; it exists for tests and CI without Docker
+    sandbox_backend: Literal["docker", "subprocess"] = "docker"
+    sandbox_image: str = "aeap-sandbox:latest"
+    sandbox_timeout_s: float = 30.0
+    sandbox_memory: str = "512m"
+    sandbox_cpus: float = 1.0
+    sandbox_max_input_rows: int = 50_000
+    sandbox_max_output_chars: int = 20_000
+    artifacts_dir: str = "data/artifacts"
+
     def postgres_dsn(self, *, read_only: bool = False) -> str:
         user, password = (
             (self.postgres_ro_user, self.postgres_ro_password)

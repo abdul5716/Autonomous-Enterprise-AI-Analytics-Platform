@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ report.title }}</title>
+<style>
+  body { font: 15px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2933;
+         max-width: 860px; margin: 2.5rem auto; padding: 0 1.25rem; }
+  h1 { font-size: 1.7rem; margin-bottom: .25rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #e4e7eb; padding-bottom: .3rem; }
+  .meta, .caption, footer { color: #616e7c; font-size: .85rem; }
+  .summary { background: #f5f7fa; border-left: 4px solid #3e7bfa; padding: .75rem 1.25rem; }
+  table { border-collapse: collapse; margin: .75rem 0; font-size: .85rem; }
+  th, td { border: 1px solid #e4e7eb; padding: .35rem .6rem; text-align: left; }
+  th { background: #eef2f7; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .chart svg { max-width: 100%; height: auto; }
+  a.cite { text-decoration: none; font-size: .8em; vertical-align: super; }
+  ol.sources li { margin-bottom: .35rem; font-size: .85rem; }
+  footer { margin-top: 3rem; border-top: 1px solid #e4e7eb; padding-top: .75rem; }
+</style>
+</head>
+<body>
+<h1>{{ report.title }}</h1>
+<p class="meta">Prepared for {{ report.prepared_for }} on {{ report.generated_at.strftime("%d %B %Y %H:%M") }} UTC
+  &middot; Question: <em>{{ report.question }}</em></p>
+
+<h2>Executive summary</h2>
+<div class="summary"><ul>
+{% for item in report.executive_summary %}  <li>{{ cite(item) }}</li>
+{% endfor %}</ul></div>
+
+{% for section in report.sections %}
+<h2>{{ section.heading }}</h2>
+{% for p in section.paragraphs %}<p>{{ cite(p) }}</p>
+{% endfor %}
+{% if section.bullets %}<ul>{% for b in section.bullets %}<li>{{ cite(b) }}</li>{% endfor %}</ul>{% endif %}
+{% if loop.index0 in charts %}<div class="chart">{{ charts[loop.index0] }}</div>{% endif %}
+{% if section.table %}
+{% if section.table.caption %}<p class="caption">{{ section.table.caption }}</p>{% endif %}
+<table>
+  <tr>{% for c in section.table.columns %}<th>{{ header(c) }}</th>{% endfor %}</tr>
+  {% for row in section.table.rows[:max_rows] %}<tr>{% for v in row %}
+    <td{% if v is number %} class="num"{% endif %}>{{ fmt(v, section.table.columns[loop.index0]) }}</td>{% endfor %}</tr>
+  {% endfor %}
+</table>
+{% if section.table.rows | length > max_rows %}<p class="caption">Showing {{ max_rows }} of {{ section.table.rows | length }} rows.</p>{% endif %}
+{% endif %}
+{% endfor %}
+
+{% if report.assumptions %}<h2>Assumptions</h2><ul>{% for a in report.assumptions %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+{% if report.limitations %}<h2>Limitations</h2><ul>{% for a in report.limitations %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+
+<h2>Sources</h2>
+<ol class="sources">
+{% for c in report.citations %}  <li id="source-{{ loop.index }}"><strong>{{ c.title }}</strong>
+    <span class="meta">({{ c.source_type }}: {{ c.source_id }})</span>{% if c.detail %}. {{ short(c.detail) }}{% endif %}
+    {% if c.url and c.url.startswith(("https://", "http://")) %}. <a href="{{ c.url }}" rel="noopener noreferrer">{{ c.url }}</a>{% endif %}</li>
+{% endfor %}</ol>
+
+<footer>{{ footer }} Report {{ report.report_id }}.</footer>
+</body>
+</html>
