@@ -19,6 +19,7 @@ health:
 
 data:
 	uv run python -m data_gen
+	uv run python -m analytics_platform.tools.rag.ingest
 
 lint:
 	uv run ruff check .

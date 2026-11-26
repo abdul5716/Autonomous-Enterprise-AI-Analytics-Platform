@@ -23,7 +23,7 @@ See [docs/architecture.md](docs/architecture.md) for the component and workflow 
 |---|---|
 | 1. Foundation: stack, config, LLM client, CI | Done |
 | 2. Synthetic data: Postgres CRM, Oracle finance, DuckDB warehouse, PDFs | Done |
-| 3. Tools: semantic layer + text-to-SQL, RAG, web research, sandbox, charts | Planned |
+| 3. Tools: semantic layer + text-to-SQL, RAG, web research, sandbox, charts | In progress (SQL and documents done) |
 | 4. LangGraph agent: planning, execution, retries, fallbacks, checkpoints | Planned |
 | 5. Validation and completion judge | Planned |
 | 6. FastAPI + Streamlit UI | Planned |
@@ -37,7 +37,7 @@ See [docs/architecture.md](docs/architecture.md) for the component and workflow 
 | Orchestration | LangGraph |
 | LLM access | LiteLLM (any provider), default `gpt-4o-mini` |
 | Structured data | PostgreSQL 16, Oracle Database Free 23ai, DuckDB |
-| Vector search | pgvector + BM25, local `fastembed` embeddings |
+| Document search | pgvector + Postgres full-text, fused with RRF; local `fastembed` embeddings and `flashrank` reranking |
 | Cache | Redis |
 | Observability | Arize Phoenix (OpenTelemetry) |
 | UI / API | Streamlit, FastAPI |
@@ -53,8 +53,10 @@ make setup     # install dependencies, create .env from .env.example
 make up        # start Postgres, Oracle, Redis, Phoenix
 make health    # check every service; add an LLM ping with:
 uv run python -m analytics_platform.healthcheck --llm
-make data      # generate and load all synthetic data (~10 seconds)
-make check     # lint, type check, tests
+make data      # generate and load all synthetic data, then index the PDFs (~15 seconds;
+               # the first run also downloads ~100 MB of embedding/reranking models)
+make check     # lint, type check, unit tests (offline)
+uv run pytest -m integration   # tests against the running databases
 ```
 
 ## Synthetic data
@@ -80,6 +82,30 @@ tools never read that file.
 Host ports: Postgres `55432`, Oracle `51521`, Redis `56379`, Phoenix UI
 [localhost:6006](http://localhost:6006).
 
+## Tools
+
+Each tool enforces the caller's permissions itself (the demo users are in
+`src/analytics_platform/security.py`), returns citations, and raises classified errors
+(`transient`, `invalid_input`, `permission`, `timeout`, `unavailable`, ...) so the agent can decide
+whether to retry, repair, fall back or report.
+
+**SQL** (`tools/sql/`). Questions are first mapped to governed metrics in
+`semantic_layer/metrics.yaml` (net revenue, refunds, budget, ...), which compile to parameterised
+warehouse SQL. Relative periods ("last 6 months", "last quarter") resolve against the warehouse's
+data date, and every interpretation is reported back as an assumption. Questions the metrics can't
+express fall back to LLM-written SQL on any of the three databases, which must pass a `sqlglot`
+guard: one `SELECT`, allowlisted tables, no file/session/sleep functions, enforced row limit. The
+databases are a second line of defence: read-only roles, statement timeouts, and Postgres
+row-level security that limits a regional user to their region's rows.
+
+**Documents** (`tools/rag/`). PDFs are parsed into sections using font sizes, chunked by section,
+embedded locally and stored in pgvector with their ACL, version and status. Retrieval runs vector
+and keyword search, fuses them with reciprocal rank fusion, and reranks with a cross-encoder.
+Postgres row-level security filters chunks by the user's groups, and superseded versions are
+excluded unless asked for. A three-level evidence check (strong / weak / none) skips the LLM
+entirely when nothing relevant is accessible. Answers must cite passage ids with word-for-word
+quotes, which are verified; unverifiable claims are repaired once, then dropped.
+
 ## Cost
 
 Built to run for a few dollars in total:
@@ -96,8 +122,12 @@ src/analytics_platform/
   config.py        settings from environment / .env
   healthcheck.py   service connectivity check
   llm/             LLM client: tiers, retries, fallback, cache, usage tracking, FakeLLM
+  security.py      user context: groups, region scope, demo users
+  tools/sql/       semantic layer compiler, period resolver, SQL guard, data sources, SQL tool
+  tools/rag/       PDF parsing, chunking, embeddings, pgvector store, hybrid retrieval, Q&A
+semantic_layer/    governed metric and dimension definitions
 src/data_gen/      synthetic data: simulation, Postgres/Oracle loaders, warehouse ETL, PDFs
 infra/postgres/    database init (schemas, pgvector, read-only analyst role)
 docs/              architecture and design decisions
-tests/             unit tests (offline)
+tests/             unit tests (offline); tests/integration needs the compose stack
 ```

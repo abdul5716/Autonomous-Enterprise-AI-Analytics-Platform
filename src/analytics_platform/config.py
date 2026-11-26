@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     postgres_password: SecretStr = SecretStr("nimbus_dev")
     postgres_ro_user: str = "analyst_ro"
     postgres_ro_password: SecretStr = SecretStr("analyst_ro_dev")
+    postgres_rag_user: str = "rag_reader"
+    postgres_rag_password: SecretStr = SecretStr("rag_reader_dev")
 
     oracle_host: str = "localhost"
     oracle_port: int = 51521
@@ -52,12 +54,29 @@ class Settings(BaseSettings):
     answer_key_path: str = "data/generated/answer_key.json"
     phoenix_url: str = "http://localhost:6006"
 
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dim: int = 384
+    reranker_model: str = "ms-marco-MiniLM-L-12-v2"
+    model_cache_dir: str = "data/models"
+    rag_candidates: int = 20  # per retriever, before fusion and reranking
+    rag_top_k: int = 5
+    # Reranker relevance bands, calibrated on the demo corpus: unrelated questions score
+    # below 0.001, vague but answerable ones 0.02-0.5, direct matches above 0.5.
+    rag_min_relevance: float = 0.01  # below: no evidence, the LLM is not called
+    rag_strong_relevance: float = 0.5  # below: weak evidence, the answer is flagged
+
     def postgres_dsn(self, *, read_only: bool = False) -> str:
         user, password = (
             (self.postgres_ro_user, self.postgres_ro_password)
             if read_only
             else (self.postgres_user, self.postgres_password)
         )
+        return self._postgres_url(user, password)
+
+    def postgres_rag_dsn(self) -> str:
+        return self._postgres_url(self.postgres_rag_user, self.postgres_rag_password)
+
+    def _postgres_url(self, user: str, password: SecretStr) -> str:
         return (
             f"postgresql://{user}:{password.get_secret_value()}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
