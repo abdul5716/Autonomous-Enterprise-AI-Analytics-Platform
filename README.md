@@ -23,7 +23,7 @@ See [docs/architecture.md](docs/architecture.md) for the component and workflow 
 |---|---|
 | 1. Foundation: stack, config, LLM client, CI | Done |
 | 2. Synthetic data: Postgres CRM, Oracle finance, DuckDB warehouse, PDFs | Done |
-| 3. Tools: semantic layer + text-to-SQL, RAG, web research, sandbox, charts | In progress (SQL and documents done) |
+| 3. Tools: semantic layer + text-to-SQL, RAG, web research, sandbox, charts, reports | Done |
 | 4. LangGraph agent: planning, execution, retries, fallbacks, checkpoints | Planned |
 | 5. Validation and completion judge | Planned |
 | 6. FastAPI + Streamlit UI | Planned |
@@ -55,6 +55,7 @@ make health    # check every service; add an LLM ping with:
 uv run python -m analytics_platform.healthcheck --llm
 make data      # generate and load all synthetic data, then index the PDFs (~15 seconds;
                # the first run also downloads ~100 MB of embedding/reranking models)
+make sandbox   # build the isolated Python analysis image
 make check     # lint, type check, unit tests (offline)
 uv run pytest -m integration   # tests against the running databases
 ```
@@ -120,6 +121,23 @@ and relevance. Findings must quote their sources word for word, like document an
 and pages are cached in Redis for a day, and a page that can't be fetched falls back to its
 search snippet, marked as such.
 
+**Python analysis** (`tools/sandbox/`). For calculations SQL can't express (growth decomposition,
+correlations, statistics), the LLM writes pandas code that runs in a throwaway Docker container
+with no network, a read-only filesystem, a non-root user, no capabilities, and memory, CPU,
+process and time limits. Before anything runs, an AST check allows only analysis libraries
+(pandas, numpy, scipy, standard maths) and rejects file, process and introspection access. Data
+goes in on stdin and the result comes back on stdout. Failed code is repaired up to twice using
+the error message.
+
+**Charts** (`tools/charts.py`). Chart specs are validated against the data's columns, and a chart
+type is suggested from its shape: lines for time series, grouped bars for current-vs-previous
+comparisons. Specs compile to Vega-Lite, which is shown interactively in the UI and rendered to
+PNG/SVG for reports.
+
+**Reports** (`tools/report/`). A report is summary, sections, tables, charts and numbered sources.
+A checker rejects citations to missing sources, unused sources and empty sections. Reports render
+to HTML (autoescaped, charts inline as SVG) and PDF, and are saved under `data/artifacts/reports/`.
+
 ## Cost
 
 Built to run for a few dollars in total:
@@ -140,9 +158,13 @@ src/analytics_platform/
   tools/sql/       semantic layer compiler, period resolver, SQL guard, data sources, SQL tool
   tools/rag/       PDF parsing, chunking, embeddings, pgvector store, hybrid retrieval, Q&A
   tools/web/       search providers, safe fetching, sanitiser, source scoring, research tool
+  tools/sandbox/   code checks, isolated runner, Docker/subprocess backends, analysis tool
+  tools/charts.py  chart specs, suggestions, Vega-Lite rendering
+  tools/report/    report model, citation checks, HTML/PDF rendering
 semantic_layer/    governed metric and dimension definitions
 src/data_gen/      synthetic data: simulation, Postgres/Oracle loaders, warehouse ETL, PDFs
 infra/postgres/    database init (schemas, pgvector, read-only analyst role)
+infra/sandbox/     analysis sandbox image
 docs/              architecture and design decisions
 tests/             unit tests (offline); tests/integration needs the compose stack
 ```

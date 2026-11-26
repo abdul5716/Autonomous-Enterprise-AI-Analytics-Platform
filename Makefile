@@ -1,4 +1,4 @@
-.PHONY: setup up down nuke health data lint fmt typecheck test check
+.PHONY: setup up down nuke health sandbox data lint fmt typecheck test check
 
 setup:
 	uv sync
@@ -16,6 +16,9 @@ nuke:
 
 health:
 	uv run python -m analytics_platform.healthcheck
+
+sandbox:
+	docker build -t aeap-sandbox:latest -f infra/sandbox/Dockerfile .
 
 data:
 	uv run python -m data_gen
