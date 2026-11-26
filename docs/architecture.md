@@ -99,6 +99,44 @@ flowchart TD
     RENDER[Render: text, table, chart, report] --> DELIVER([Deliver with sources,<br/>assumptions, SQL, confidence])
 ```
 
+### The graph as built
+
+The LangGraph graph in `src/analytics_platform/agent/graph.py` implements this workflow. The step
+and output validators and the completion judge arrive in milestone 5. Until then the renderer
+derives gaps from the synthesiser's contract coverage, failed steps and budget stops.
+
+```mermaid
+flowchart TD
+    S([question + user]) --> intent
+    intent -- out of scope --> refuse --> E([END])
+    intent -- "ambiguous (max 1 round)" --> clarify
+    clarify -- "interrupt(): pause, checkpoint, resume with the reply" --> intent
+    intent -- "document question / simple data query" --> fast_plan
+    intent -- "root cause, research, reports" --> planner
+    fast_plan --> plan_check
+    planner --> plan_check
+    plan_check -- "problems, replan budget left" --> planner
+    plan_check -- "valid, or invalid steps pruned to gaps" --> executor
+    executor -- "next wave of ready steps" --> executor
+    executor -- "all steps done, failed or skipped" --> synthesize
+    synthesize --> render --> E
+```
+
+Each executor wave runs every step whose dependencies are done, concurrently. Inside a step:
+
+- **Retries:** transient errors and timeouts are retried with exponential backoff and jitter.
+  Permission, invalid-input and unavailable errors are not retried.
+- **Circuit breaker:** a dependency that fails repeatedly is skipped for a cooldown. The breaker
+  is shared across requests, and SQL databases have their own breakers.
+- **Fallback:** if the CRM or finance database is down, free-form SQL runs again without it.
+  Governed metrics always come from the warehouse, which holds a copy of both.
+- **Skipping:** a step whose inputs failed, or returned nothing, is skipped and recorded.
+- **Budgets:** each request has limits on tool calls, LLM calls, cost and time, checked before
+  every wave. When one runs out, the remaining steps become gaps in a partial answer.
+
+State is checkpointed in Postgres (schema `agent`) after every node. The deserialiser only
+accepts the agent's own state types.
+
 ## Key decisions
 
 - **The completion judge is deterministic.** An "answer contract" (a checklist of what a complete answer

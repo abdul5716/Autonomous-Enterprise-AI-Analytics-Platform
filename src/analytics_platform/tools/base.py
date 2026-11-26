@@ -16,10 +16,18 @@ class ErrorKind(StrEnum):
 class ToolError(Exception):
     """A classified tool failure, so the agent can choose retry, repair, fallback or report."""
 
-    def __init__(self, message: str, *, kind: ErrorKind, details: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        kind: ErrorKind,
+        details: str | None = None,
+        source: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.kind = kind
         self.details = details
+        self.source = source  # the failing dependency, e.g. "finance", so a fallback can avoid it
 
     @property
     def retryable(self) -> bool:

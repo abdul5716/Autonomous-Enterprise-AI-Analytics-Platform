@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Sequence, Set
 from typing import Any, Literal
 
 import pandas as pd
@@ -89,8 +89,17 @@ class SQLTool:
         assert isinstance(source, DuckDBWarehouse)
         return source
 
-    async def ask(self, question: str, user: UserContext) -> QueryResult:
-        """Answer a data question, preferring governed metrics over free-form SQL."""
+    async def ask(
+        self, question: str, user: UserContext, *, exclude_sources: Set[str] = frozenset()
+    ) -> QueryResult:
+        """Answer a data question, preferring governed metrics over free-form SQL.
+
+        `exclude_sources` names databases known to be down; they are left out of free-form SQL.
+        """
+        if "warehouse" in exclude_sources:
+            raise ToolError(
+                "The warehouse is unavailable.", kind=ErrorKind.UNAVAILABLE, source="warehouse"
+            )
         as_of = await asyncio.to_thread(self.warehouse.as_of)
         messages: list[Message] = [
             {
@@ -118,7 +127,7 @@ class SQLTool:
                 {"role": "user", "content": "Fix these problems:\n- " + "\n- ".join(errors)},
             ]
             plan = await self.llm.structured(messages, SemanticPlan, tier=ModelTier.STRONG)
-        return await self._freeform(question, user, as_of.isoformat())
+        return await self._freeform(question, user, as_of.isoformat(), exclude_sources)
 
     async def run_metric_query(self, q: MetricQuery, user: UserContext) -> QueryResult:
         errors = self.compiler.validate(q)
@@ -222,14 +231,23 @@ class SQLTool:
             ),
         )
 
-    async def _freeform(self, question: str, user: UserContext, as_of: str) -> QueryResult:
+    async def _freeform(
+        self, question: str, user: UserContext, as_of: str, exclude_sources: Set[str]
+    ) -> QueryResult:
         usable = []
         for source in self.sources.values():
+            if source.name in exclude_sources:
+                continue
             try:
                 source.check_access(user)
             except ToolError:
                 continue
             usable.append(source)
+        if not usable:
+            raise ToolError(
+                "No database you can query is available for this question.",
+                kind=ErrorKind.UNAVAILABLE,
+            )
         schemas = await asyncio.gather(*(asyncio.to_thread(s.schema) for s in usable))
         messages: list[Message] = [
             {

@@ -1,4 +1,6 @@
-.PHONY: setup up down nuke health sandbox data lint fmt typecheck test check
+.PHONY: setup up down nuke health sandbox data ask lint fmt typecheck test check
+
+AS ?= finance.admin
 
 setup:
 	uv sync
@@ -23,6 +25,9 @@ sandbox:
 data:
 	uv run python -m data_gen
 	uv run python -m analytics_platform.tools.rag.ingest
+
+ask:  # make ask Q="Why did revenue drop last quarter?" AS=emea.sales
+	uv run python -m analytics_platform.agent "$(Q)" --user $(AS)
 
 lint:
 	uv run ruff check .
