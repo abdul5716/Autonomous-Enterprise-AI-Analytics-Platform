@@ -14,5 +14,6 @@ data/warehouse/
 data/artifacts/
 data/documents/
 data/generated/
+data/models/
 *.duckdb
 *.duckdb.wal
