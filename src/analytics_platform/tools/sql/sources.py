@@ -114,7 +114,9 @@ class DataSource(ABC):
         return result
 
     def _unavailable(self, exc: Exception) -> ToolError:
-        return ToolError(f"{self.name} is unavailable: {exc}", kind=ErrorKind.UNAVAILABLE)
+        return ToolError(
+            f"{self.name} is unavailable: {exc}", kind=ErrorKind.UNAVAILABLE, source=self.name
+        )
 
     def _rejected(self, exc: Exception, sql: str) -> ToolError:
         return ToolError(
@@ -261,7 +263,7 @@ class DuckDBWarehouse(DataSource):
                 config={"enable_external_access": False},
             )
         except duckdb.IOException as exc:
-            raise ToolError(f"Warehouse is unavailable: {exc}", kind=ErrorKind.UNAVAILABLE) from exc
+            raise self._unavailable(exc) from exc
 
     def _execute(
         self, sql: str, params: Sequence[Any], user: UserContext, timeout_s: float

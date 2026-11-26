@@ -87,6 +87,19 @@ class Settings(BaseSettings):
     sandbox_max_output_chars: int = 20_000
     artifacts_dir: str = "data/artifacts"
 
+    # Per-request budgets; when one runs out, remaining steps become gaps in a partial answer.
+    agent_max_plan_steps: int = 8
+    agent_max_tool_calls: int = 14  # including retries and fallbacks
+    agent_max_llm_calls: int = 40
+    agent_max_cost_usd: float = 0.50
+    agent_max_seconds: float = 300.0
+    agent_max_replans: int = 1
+    agent_max_clarifications: int = 1
+    agent_retry_attempts: int = 3  # per step, for transient errors and timeouts
+    agent_retry_base_delay_s: float = 0.5
+    agent_breaker_threshold: int = 3  # consecutive dependency failures before it is skipped
+    agent_breaker_cooldown_s: float = 60.0
+
     def postgres_dsn(self, *, read_only: bool = False) -> str:
         user, password = (
             (self.postgres_ro_user, self.postgres_ro_password)

@@ -24,7 +24,7 @@ See [docs/architecture.md](docs/architecture.md) for the component and workflow 
 | 1. Foundation: stack, config, LLM client, CI | Done |
 | 2. Synthetic data: Postgres CRM, Oracle finance, DuckDB warehouse, PDFs | Done |
 | 3. Tools: semantic layer + text-to-SQL, RAG, web research, sandbox, charts, reports | Done |
-| 4. LangGraph agent: planning, execution, retries, fallbacks, checkpoints | Planned |
+| 4. LangGraph agent: planning, execution, retries, fallbacks, checkpoints | Done |
 | 5. Validation and completion judge | Planned |
 | 6. FastAPI + Streamlit UI | Planned |
 | 7. Evaluations and observability | Planned |
@@ -56,6 +56,7 @@ uv run python -m analytics_platform.healthcheck --llm
 make data      # generate and load all synthetic data, then index the PDFs (~15 seconds;
                # the first run also downloads ~100 MB of embedding/reranking models)
 make sandbox   # build the isolated Python analysis image
+make ask Q="Why did revenue drop last quarter?"   # ask the agent (AS=emea.sales to switch user)
 make check     # lint, type check, unit tests (offline)
 uv run pytest -m integration   # tests against the running databases
 ```
@@ -138,6 +139,37 @@ PNG/SVG for reports.
 A checker rejects citations to missing sources, unused sources and empty sections. Reports render
 to HTML (autoescaped, charts inline as SVG) and PDF, and are saved under `data/artifacts/reports/`.
 
+## Agent
+
+The agent (`agent/`) is a LangGraph graph. It works in five stages:
+
+1. It classifies the request as a data query, root-cause analysis, market research, document
+   question or out of scope.
+2. If the request can't be answered sensibly as stated, it pauses with one clarifying question,
+   then resumes from its Postgres checkpoint once the user replies. Missing time periods or
+   regions don't count: defaults are applied and reported as assumptions.
+3. Simple requests get a fixed one-tool plan with no planner call. Everything else is planned by
+   the LLM as a dependency graph of tool steps, together with an **answer contract**: the items a
+   complete answer must contain.
+4. A deterministic checker validates the plan: known tools, earlier dependencies only, charts
+   and analyses fed by tables, no internal data in web queries, and every contract item covered.
+   A bad plan is sent back once with the problems; invalid steps that remain are dropped and
+   recorded as gaps.
+5. The executor runs independent steps in parallel. A synthesiser then writes the answer from the
+   evidence only, citing step ids, which become numbered sources. Reports are rendered to
+   HTML/PDF.
+
+Failures degrade the answer instead of breaking it:
+
+- Transient errors are retried with backoff.
+- A database that keeps failing trips a circuit breaker.
+- If Oracle is down, SQL falls back to the other sources.
+- Steps whose inputs failed are skipped.
+- Per-request budgets (tool calls, LLM calls, cost, time) stop runaway work.
+
+Whatever could not be done is listed as a gap in a partial answer. See
+[docs/architecture.md](docs/architecture.md#the-graph-as-built) for the graph.
+
 ## Cost
 
 Built to run for a few dollars in total:
@@ -155,6 +187,8 @@ src/analytics_platform/
   healthcheck.py   service connectivity check
   llm/             LLM client: tiers, retries, fallback, cache, usage tracking, FakeLLM
   security.py      user context: groups, region scope, demo users
+  agent/           LangGraph graph, planning checks, step execution, rendering, checkpoints, CLI
+  reliability/     retries with backoff, circuit breaker
   tools/sql/       semantic layer compiler, period resolver, SQL guard, data sources, SQL tool
   tools/rag/       PDF parsing, chunking, embeddings, pgvector store, hybrid retrieval, Q&A
   tools/web/       search providers, safe fetching, sanitiser, source scoring, research tool
