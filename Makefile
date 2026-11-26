@@ -1,4 +1,4 @@
-.PHONY: setup up down nuke health lint fmt typecheck test check
+.PHONY: setup up down nuke health data lint fmt typecheck test check
 
 setup:
 	uv sync
@@ -16,6 +16,9 @@ nuke:
 
 health:
 	uv run python -m analytics_platform.healthcheck
+
+data:
+	uv run python -m data_gen
 
 lint:
 	uv run ruff check .

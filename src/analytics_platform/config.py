@@ -40,6 +40,9 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:56379/0"
     duckdb_path: str = "data/warehouse/nimbus.duckdb"
+    documents_dir: str = "data/documents"
+    # Expected answers for evals. Never exposed to the agent's tools.
+    answer_key_path: str = "data/generated/answer_key.json"
     phoenix_url: str = "http://localhost:6006"
 
     def postgres_dsn(self, *, read_only: bool = False) -> str:

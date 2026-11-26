@@ -12,5 +12,7 @@ build/
 
 data/warehouse/
 data/artifacts/
+data/documents/
+data/generated/
 *.duckdb
 *.duckdb.wal
